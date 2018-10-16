@@ -11,7 +11,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	private int maxNum;
 	private int currNum;
 	private String message;
-	private ArrayList<Node> nodeList;
+	private HashMap<Integer,Node> nodeList;
 	static final int DEFAULT_PORT = 1083;
 
 	CentralNode(int maxNum){
@@ -54,7 +54,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	}
 
 	// Function to initialize finger table for the new node
-	public String getFingerTable(int id) throws RemoteException{
+	public ArrayList<Node> getFingerTable(int id) throws RemoteException{
 		Collections.sort(nodeID);
 		int len = nodeID.size();
 		for(int i = 0; i < len; i++){
@@ -62,15 +62,10 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 				break;
 		}
 		int increment = 1;
-		String result = "";
-		boolean first = true;
+		ArrayList<Node> result = new ArrayList<Node>();
 		for(i = i + 1; i < len; i = i + increment;){
-			if(!first){
-				result += "/";
-				first = false;
-			}
 			increment = increment * 2;
-			result += Integer.toString(nodeID[i]);
+			result.add(nodeList.get(nodeID[i]));
 		}
 		return result;
 	}
@@ -108,7 +103,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 		// Creating new node
 		Node node = new Node(ip,port,id);
 		// Adding the node information to the node list
-		nodeList.add(node);
+		nodeList.put(nodeID,node);
 		Collections.sort(nodeID);
 		// Getting predecessor for the given node
 		int pred = getPredecessor(id);

@@ -10,7 +10,7 @@ class NodeDHT implements Runnable{
 	private Socket connection;
 	private String message;
 	private HashMap<String,String> words;
-	private ArrayList<Integer> fingers;
+	private ArrayList<Node> fingers;
 
 	NodeDHT(String arrValue[]){
 		node = new Node(arrValue[0],Integer.parseInt(arrValue[1]),Integer.parseInt(arrValue[2]));
@@ -18,16 +18,30 @@ class NodeDHT implements Runnable{
 		words = new HashMap<String,String>();
 		message = "";
 		type = false;
-		fingers = new ArrayList<Integer>();
+		fingers = new ArrayList<INode>();
 	}
 
 	public void initializeFingers(CentralNode object){
-		String value = object.getFingerTable(this.node.id);
-		String result[] = value.split("/");
-		for(String ids : resutl){
-			this.fingers.add(Integer.parseInt(ids));
-		}
+		this.fingers = object.getFingerTable(this.node.id);
 		System.out.println("Finger table initialized successfully");
+	}
+
+	public int getNodeId(String hash){
+		MessageDigest md = MessageDigest.getInstance("SHA1");
+        md.reset();
+        md.update(hash.getBytes());
+        byte[] hashBytes = md.digest();
+        BigInteger hashNum = new BigInteger(1,hashBytes);
+        id = Math.abs(hashNum.intValue()) % this.maxNum;
+        // Checking with previously generated IDs
+        while(nodeID.contains(id)) {
+            md.reset();
+            md.update(hashBytes);
+            hashBytes = md.digest();
+            hashNum = new BigInteger(1,hashBytes);
+            id = Math.abs(hashNum.intValue()) % this.maxNum;
+        }
+        return id;
 	}
 
 	public void initializeWords(){
@@ -64,6 +78,26 @@ class NodeDHT implements Runnable{
 					}
 					break;
 					case 2:
+					String word = reader.reaLine();
+					int wordID = this.getNodeId(word);
+					String mess = "Put "+word+" "+Integer.toString(wordID);
+					if(wordID > this.node.id && wordID < this.fingers[0].id || wordID == this.node.id){
+						words.put(Integer.toString(wordID),word);
+						System.out.println("Word has been put in the network");
+					}
+					else{
+						int len = this.fingers.size();
+						for(int i = 0; i < len; i++){
+							if(wordID > this.fingers[i].id && wordID < this.fingers[i+1].id || wordID == this.fingers[i].id)
+								break;
+						}
+						Socket s = new Socket(this.fingers[i].ip,this.fingers[i].port);
+						DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+						out.writeUTF(mess);
+						BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
+						String inputFromServer = fromServer.readLine();
+						System.out.println("Word has been put in the network");
+					}
 					break;
 					case 3:
 					break;
