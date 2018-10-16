@@ -54,7 +54,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	}
 
 	// Function to provide information about the node
-	String getNodeInfo(int id){
+	public String getNodeInfo(int id){
 		String result="";
 		for(Node temp : nodeList){
 			if(temp.id == id){
