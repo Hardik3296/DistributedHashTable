@@ -22,7 +22,12 @@ class NodeDHT implements Runnable{
 	}
 
 	public void initializeFingers(CentralNode object){
-		String value = object.
+		String value = object.getFingerTable(this.node.id);
+		String result[] = value.split("/");
+		for(String ids : resutl){
+			this.fingers.add(Integer.parseInt(ids));
+		}
+		System.out.println("Finger table initialized successfully");
 	}
 
 	public void initializeWords(){

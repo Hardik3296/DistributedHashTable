@@ -10,4 +10,5 @@ public interface CentralNodeInterface extends Remote{
 	public int getPredecessor(int id);
 	public String getNodeInfo(int id);
 	public String joinNetwork(String ip, int port);
+	public String getFingerTable(int id);
 }

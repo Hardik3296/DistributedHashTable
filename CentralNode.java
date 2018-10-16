@@ -53,6 +53,28 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 		return pred;
 	}
 
+	// Function to initialize finger table for the new node
+	public String getFingerTable(int id) throws RemoteException{
+		Collections.sort(nodeID);
+		int len = nodeID.size();
+		for(int i = 0; i < len; i++){
+			if(nodeID[i] == id)
+				break;
+		}
+		int increment = 1;
+		String result = "";
+		boolean first = true;
+		for(i = i + 1; i < len; i = i + increment;){
+			if(!first){
+				result += "/";
+				first = false;
+			}
+			increment = increment * 2;
+			result += Integer.toString(nodeID[i]);
+		}
+		return result;
+	}
+
 	// Function to provide information about the node
 	public String getNodeInfo(int id){
 		String result="";
@@ -66,7 +88,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	}
 
 	// Function to allow other nodes to join the network
-	public String joinNetwork(String ip, int port){
+	public String joinNetwork(String ip, int port) throws RemoteException{
 		if(busy){
 			return "BUSY";
 		}
