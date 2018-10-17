@@ -11,14 +11,16 @@ class NodeDHT implements Runnable{
 	private String message;
 	private HashMap<String,String> words;
 	private ArrayList<Node> fingers;
+	private CentralNode object;
 
-	NodeDHT(String arrValue[]){
+	NodeDHT(String arrValue[], CentralNode object){
 		node = new Node(arrValue[0],Integer.parseInt(arrValue[1]),Integer.parseInt(arrValue[2]));
 		predecessor = new Node(arrValue[3],Integer.parseInt(arrValue[4]),Integer.parseInt(arrValue[5]));
 		words = new HashMap<String,String>();
 		message = "";
 		type = false;
 		fingers = new ArrayList<INode>();
+		this.object = object;
 	}
 
 	public void initializeFingers(CentralNode object){
@@ -66,7 +68,6 @@ class NodeDHT implements Runnable{
 				System.out.println("Press 1 for complete information on this node'");
 				System.out.println("Press 2 to input values.");
 				System.out.println("Press 3 to leave the network");
-				System.out.println("Press 4 to obtain information for given key");
 				int input;
 				input = Integer.parseInt(reader.readLine());
 				switch(input){
@@ -93,22 +94,43 @@ class NodeDHT implements Runnable{
 						}
 						Socket s = new Socket(this.fingers[i].ip,this.fingers[i].port);
 						DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
-						out.writeUTF(mess);
+						toServer.writeUTF(mess);
 						BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
 						String inputFromServer = fromServer.readLine();
 						System.out.println("Word has been put in the network");
+						String result[] = inputFromServer.split("/");
+						for(String value : result){
+							System.out.print(value+" ");
+						}
 					}
 					break;
 					case 3:
-					break;
-					case 4:
+					this.object.leaveNetwork(this.node.id);
+					Socket s = new Socket(this.fingers[0].ip,this.fingers[0].port);
+					DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+					String result = "";
+					Set<String>keys = words.keySet();
+					boolean first = true;
+					for(Integer key : keys){
+						if(!first)
+							result += "/";
+						first = false;
+						result = result + (Integer.toString(key)+":"+words.get(key)); 
+					}
+					String mess = "Put All/"+result;
+					toServer.writeUTF(mess);
+					toServer.close();
+					s.close();
+					connection.close();
 					break;
 					default:
+					System.out.println("The input selected is wrong.");
+					System.out.println("Please input correct option");
 				}
 			}
 		}
 		else{
-
+			
 		}
 	}
 
@@ -142,7 +164,7 @@ class NodeDHT implements Runnable{
 		}
 		String arrValue[] = value.split("/");
 		// Creating the node from the information obtained
-		NodeDHT dht = new NodeDHT(arrvalue);
+		NodeDHT dht = new NodeDHT(arrvalue,object);
 		dht.initializeWords();
 		dht.initializeFingers(object);
 		dht.type = true;

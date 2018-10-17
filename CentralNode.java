@@ -12,7 +12,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	private int currNum;
 	private String message;
 	private HashMap<Integer,Node> nodeList;
-	static final int DEFAULT_PORT = 1083;
+	static final int DEFAULT_PORT = 100000;
 
 	CentralNode(int maxNum){
 		this.nodeID = new ArrayList<Integer>();
@@ -117,6 +117,16 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 			busy = false;
 		}
 		return nodeInfo+"/"+predInfo;
+	}
+
+	public void leaveNetwork(int id){
+		for(int value : nodeID){
+			if(value == id){
+				nodeID.remove(value);
+				break;
+			}
+		}
+		currNum--;
 	}
 
 	public static void main(String args[]) throws Exception{
