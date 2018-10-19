@@ -124,9 +124,11 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 		return nodeInfo+"/"+predInfo;
 	}
 
+	// Removing the details of the given node from the central node
 	public void leaveNetwork(int id){
 		Node pred;
 		int succId;
+		// Removing the concerned node
 		Set<Integer> keys = nodeList.keySet();
 		for(Integer key : keys){
 			if(key == id){
@@ -134,6 +136,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 				break;
 			}
 		}
+		// Removing the concerned node's id
 		for(int value : nodeID){
 			if(value == id){
 				nodeID.remove(value);

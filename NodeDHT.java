@@ -25,11 +25,13 @@ class NodeDHT implements Runnable{
 		this.object = object;
 	}
 
+	// Initializing Finger Table for the newly created Node
 	public void initializeFingers(CentralNode object) throws Exception{
 		this.fingers = object.getFingerTable(this.node.getID());
 		System.out.println("Finger table initialized successfully");
 	}
 
+	// Getting id for the word to be added to the node
 	public int getNodeId(String hash) throws Exception{
 		MessageDigest md = MessageDigest.getInstance("SHA1");
         md.reset();
@@ -40,55 +42,71 @@ class NodeDHT implements Runnable{
         return id;
 	}
 
+	// Inserting inputted word in the network
 	public String insertWordInNetwork(String mess) throws Exception{
 		String result[] = mess.split("/");
 		int wid = Integer.parseInt(result[2]);
+		// If the word id belongs to theis node, then insert the word in this node
 		if(wid > this.node.getID() && wid < this.fingers.get(0).getID() || wid == this.node.getID() || this.node.getID() < wid && wid > this.fingers.get(0).getID()){
 			words.put(Integer.toString(wid),result[1]);
 			String returnMess = Integer.toString(this.node.getID());
 			return returnMess;
 		}
 		else{
+			// Else check for the node to which the word id belongs
 			int len = this.fingers.size();
 			int i;
 			for(i = 0; i < len; i++){
 				if(wid > this.fingers.get(i).getID() && wid < this.fingers.get(i+1).getID() || wid == this.fingers.get(i).getID())
 					break;
 			}
+			// Create a connection to the node responsible for this word nd send it the word to store
 			Socket s = new Socket(this.fingers.get(i).getIP(),this.fingers.get(i).getPort());
 			DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+			// Writing output to the socket
 			toServer.writeUTF(mess);
 			BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
+			// Reading input from the socket
 			String inputFromServer = fromServer.readLine();
+			// Returning the input to the calling function or node
 			return inputFromServer;
 		}
 	}
 
+	// Function to retrieve the words from the predecessor that belong to this node
 	public void initializeWords() throws Exception{
+		// Creating a connection with the predecessor to obtain the required words along with their ids.
 		Socket s = new Socket(this.predecessor.getIP(),this.predecessor.getPort());
 		DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
 		BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
 		String mess = "Initialize Finger Table/"+Integer.toString(this.node.getID());
 		toServer.writeUTF(mess);
 		String inputFromServer = fromServer.readLine();
+		// Splitting the message received into different word id and word pairs
 		String value[] = inputFromServer.split("/");
 		for(String pair : value){
+			// Splitting each individual pair into id and the corresponding word
 			String keyValue[] = pair.split(":");
 			this.words.put(keyValue[0],keyValue[1]);
 		}
 		System.out.println("Key Value pairs initialized successfully");
 	}
 
+	// Function to insert all the words obtained from its successor when successor leaves the network
 	public void insertAllWords(String word) throws Exception{
+		// Splitting the message received into different word id and word pairs
 		String res[] = word.split("/");
 		for(String eachpair : res){
+			// Splitting each individual pair into id and the corresponding word
 			String value[] = eachpair.split("/");
 			this.words.put(value[0],value[1]);
 		}
 	}
 
+	// Implementing threading
 	public void run(){
 		if(this.type){
+			// Thread responsible for taking input from the user for different functions
 			try{
 				BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 				while(true){
@@ -98,6 +116,7 @@ class NodeDHT implements Runnable{
 					int input;
 					input = Integer.parseInt(reader.readLine());
 					switch(input){
+						// For displaying all the words stored on this network
 						case 1:
 						Set<String>keys = this.words.keySet();
 						System.out.println("Key"+"		"+"Value");
@@ -105,22 +124,26 @@ class NodeDHT implements Runnable{
 							System.out.println(k+"		"+this.words.get(k));
 						}
 						break;
+						// For inputting word into the network
 						case 2:
 						String word = reader.readLine();
 						int wordID = this.getNodeId(word);
 						String mess = "Put "+word+" "+Integer.toString(wordID);
+						// If the word belongs to this node, then insert it.
 						if(wordID > this.node.getID() && wordID < this.fingers.get(0).getID() || wordID == this.node.getID()){
 							words.put(Integer.toString(wordID),word);
 							System.out.println("Word has been put in the network");
 							System.out.println("The word has been put in the node with node id "+this.node.getID());
 						}
 						else{
+							// If the word belongs to some other node, find that node and send it the word to be stored
 							int len = this.fingers.size();
 							int i;
 							for(i = 0; i < len; i++){
 								if(wordID > this.fingers.get(i).getID() && wordID < this.fingers.get(i+1).getID() || wordID == this.fingers.get(i).getID())
 									break;
 							}
+							// Establishing connection with the corresponding node
 							Socket s = new Socket(this.fingers.get(i).getIP(),this.fingers.get(i).getPort());
 							DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
 							toServer.writeUTF(mess);
@@ -130,8 +153,10 @@ class NodeDHT implements Runnable{
 							System.out.println("The word has been put in the node with node id "+inputFromServer);
 						}
 						break;
+						// When the node leaves the network
 						case 3:
 						try{
+							// Transfer all the words to the predecessor node
 							Socket s = new Socket(this.predecessor.getIP(),this.predecessor.getPort());
 							DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
 							String result = "";
@@ -144,10 +169,12 @@ class NodeDHT implements Runnable{
 								result = result + (key+":"+words.get(key)); 
 							}
 							String mess1 = "Put All/"+result;
+							// Removing this node's aentries from the central node.
 							this.object.leaveNetwork(this.node.getID());
 							toServer.writeUTF(mess1);
 							toServer.close();
 							s.close();
+							// Changing the predecessor of this node's successor to this node's predecessor
 							String mess2 = "Change Predecessor/"+this.fingers.get(0).getIP()+"/"+Integer.toString(this.fingers.get(0).getPort())+"/"+Integer.toString(this.fingers.get(0).getID());
 							Socket sec = new Socket(this.fingers.get(0).getIP(),this.fingers.get(0).getPort());
 							DataOutputStream toServersec = new DataOutputStream(sec.getOutputStream());
@@ -168,6 +195,7 @@ class NodeDHT implements Runnable{
 			}
 		}
 		else{
+			// This thread is responsible for listening to the connection requests from other nodes and sending adequate responses to them
 			try{
 				String result[] = message.split("/");
 				if(result[0].equals("Put")){
