@@ -1,6 +1,8 @@
 import java.io.*;
 import java.util.*;
 import java.net.*;
+import java.security.*;
+import java.math.BigInteger; 
 import java.rmi.*;
 import java.rmi.server.*;
 import java.rmi.Naming;
@@ -12,23 +14,24 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	private int currNum;
 	private String message;
 	private HashMap<Integer,Node> nodeList;
-	static final int DEFAULT_PORT = 100000;
+	static final int DEFAULT_PORT = 1099;
 
-	CentralNode(int maxNum){
+	CentralNode(int maxNum) throws RemoteException{
 		this.nodeID = new ArrayList<Integer>();
 		this.busy=false;
 		this.currNum = 0;
 		this.maxNum = maxNum;
+		System.out.println("All done!!!!!!!");
 	}
 
 	// Function to generate unoque key for the node
-	public int getNodeId(String hash){
+	public int getNodeId(String hash) throws RemoteException,NoSuchAlgorithmException{
 		MessageDigest md = MessageDigest.getInstance("SHA1");
         md.reset();
         md.update(hash.getBytes());
         byte[] hashBytes = md.digest();
         BigInteger hashNum = new BigInteger(1,hashBytes);
-        id = Math.abs(hashNum.intValue()) % this.maxNum;
+        int id = Math.abs(hashNum.intValue()) % this.maxNum;
         // Checking with previously generated IDs
         while(nodeID.contains(id)) {
             md.reset();
@@ -57,15 +60,16 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	public ArrayList<Node> getFingerTable(int id) throws RemoteException{
 		Collections.sort(nodeID);
 		int len = nodeID.size();
-		for(int i = 0; i < len; i++){
-			if(nodeID[i] == id)
+		int i;
+		for(i = 0; i < len; i++){
+			if(nodeID.get(i) == id)
 				break;
 		}
 		int increment = 1;
 		ArrayList<Node> result = new ArrayList<Node>();
-		for(i = i + 1; i < len; i = i + increment;){
+		for(i = i + 1; i < len; i = i + increment){
 			increment = increment * 2;
-			result.add(nodeList.get(nodeID[i]));
+			result.add(nodeList.get(nodeID.get(i)));
 		}
 		return result;
 	}
@@ -73,9 +77,10 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	// Function to provide information about the node
 	public String getNodeInfo(int id){
 		String result="";
-		for(Node temp : nodeList){
-			if(temp.id == id){
-				result=temp.ip+"/"+Integer.toString(port)+"/"+Integer.toString(id);
+		Set<Integer>keys = nodeList.keySet();
+		for(Integer key : keys){
+			if(key == id){
+				result=nodeList.get(key).getIP()+"/"+Integer.toString(nodeList.get(key).getPort())+"/"+Integer.toString(nodeList.get(key).getID());
 				return result;
 			}
 		}
@@ -83,7 +88,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	}
 
 	// Function to allow other nodes to join the network
-	public String joinNetwork(String ip, int port) throws RemoteException{
+	public String joinNetwork(String ip, int port) throws RemoteException,NoSuchAlgorithmException{
 		if(busy){
 			return "BUSY";
 		}
@@ -103,7 +108,7 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 		// Creating new node
 		Node node = new Node(ip,port,id);
 		// Adding the node information to the node list
-		nodeList.put(nodeID,node);
+		nodeList.put(id,node);
 		Collections.sort(nodeID);
 		// Getting predecessor for the given node
 		int pred = getPredecessor(id);
@@ -120,6 +125,15 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 	}
 
 	public void leaveNetwork(int id){
+		Node pred;
+		int succId;
+		Set<Integer> keys = nodeList.keySet();
+		for(Integer key : keys){
+			if(key == id){
+				nodeList.remove(key);
+				break;
+			}
+		}
 		for(int value : nodeID){
 			if(value == id){
 				nodeID.remove(value);
@@ -131,24 +145,24 @@ class CentralNode extends UnicastRemoteObject implements CentralNodeInterface{
 
 	public static void main(String args[]) throws Exception{
 		// Entering maximum number of nodes to be allowed simultaneous connection in the network
-		BufferedReader reader = new BufferedReader(new IputStreamReader(System.in));
+		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 		System.out.println("Enter maximum number of nodes allowed");
 		int maxNum;
 		try{
-			maxNum = Integer.parseInt(reader.readLine());
+			try{
+				maxNum = Integer.parseInt(reader.readLine());
+				// Creating object for central node
+				CentralNode superNode = new CentralNode(maxNum);
+				// Binding the object with the registry
+				Naming.rebind("CentralNodeDef",superNode);
+			}catch(Exception e){
+				System.out.println("Error in value of maximum number of nodes");
+				System.out.println("System exiting....");
+				System.exit(0);
+			}
 		}catch(Exception e){
-			System.out.println("Error in value of maximum number of nodes");
-			System.out.println("System exiting....")
-			System.exit(0);
-		}
-		// Creating object for central node
-		CentralNode superNode = new CentralNode(maxNum);
-		// Binding the object with the registry
-		try{
-			Naming.rebind("CentralNode",superNode);
-		}catch(Exception e){
-			System.out.println("Central node could not be bound to registry");
-			System.out.println("System exiting");
+			System.out.println("Error in binding Central Node");
+			System.out.println("System exiting........");
 			System.exit(0);
 		}
 		System.out.println("Central Node is waiting for connection......");

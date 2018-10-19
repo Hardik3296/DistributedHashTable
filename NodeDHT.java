@@ -1,6 +1,8 @@
 import java.io.*;
 import java.util.*;
 import java.net.*;
+import java.math.BigInteger; 
+import java.security.*;
 import java.rmi.*;
 import java.rmi.server.*;
 import java.rmi.Naming;
@@ -13,128 +15,176 @@ class NodeDHT implements Runnable{
 	private ArrayList<Node> fingers;
 	private CentralNode object;
 
-	NodeDHT(String arrValue[], CentralNode object){
+	NodeDHT(String arrValue[], CentralNode object) throws Exception{
 		node = new Node(arrValue[0],Integer.parseInt(arrValue[1]),Integer.parseInt(arrValue[2]));
 		predecessor = new Node(arrValue[3],Integer.parseInt(arrValue[4]),Integer.parseInt(arrValue[5]));
 		words = new HashMap<String,String>();
 		message = "";
 		type = false;
-		fingers = new ArrayList<INode>();
+		fingers = new ArrayList<Node>();
 		this.object = object;
 	}
 
-	public void initializeFingers(CentralNode object){
-		this.fingers = object.getFingerTable(this.node.id);
+	public void initializeFingers(CentralNode object) throws Exception{
+		this.fingers = object.getFingerTable(this.node.getID());
 		System.out.println("Finger table initialized successfully");
 	}
 
-	public int getNodeId(String hash){
+	public int getNodeId(String hash) throws Exception{
 		MessageDigest md = MessageDigest.getInstance("SHA1");
         md.reset();
         md.update(hash.getBytes());
         byte[] hashBytes = md.digest();
         BigInteger hashNum = new BigInteger(1,hashBytes);
-        id = Math.abs(hashNum.intValue()) % this.maxNum;
-        // Checking with previously generated IDs
-        while(nodeID.contains(id)) {
-            md.reset();
-            md.update(hashBytes);
-            hashBytes = md.digest();
-            hashNum = new BigInteger(1,hashBytes);
-            id = Math.abs(hashNum.intValue()) % this.maxNum;
-        }
+        int id = Math.abs(hashNum.intValue()) % 65536;
         return id;
 	}
 
-	public void initializeWords(){
-		Socket s = new Socket(this.predecessor.ip,this.predecessor.port);
+	public String insertWordInNetwork(String mess) throws Exception{
+		String result[] = mess.split("/");
+		int wid = Integer.parseInt(result[2]);
+		if(wid > this.node.getID() && wid < this.fingers.get(0).getID() || wid == this.node.getID() || this.node.getID() < wid && wid > this.fingers.get(0).getID()){
+			words.put(Integer.toString(wid),result[1]);
+			String returnMess = Integer.toString(this.node.getID());
+			return returnMess;
+		}
+		else{
+			int len = this.fingers.size();
+			int i;
+			for(i = 0; i < len; i++){
+				if(wid > this.fingers.get(i).getID() && wid < this.fingers.get(i+1).getID() || wid == this.fingers.get(i).getID())
+					break;
+			}
+			Socket s = new Socket(this.fingers.get(i).getIP(),this.fingers.get(i).getPort());
+			DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+			toServer.writeUTF(mess);
+			BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
+			String inputFromServer = fromServer.readLine();
+			return inputFromServer;
+		}
+	}
+
+	public void initializeWords() throws Exception{
+		Socket s = new Socket(this.predecessor.getIP(),this.predecessor.getPort());
 		DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
 		BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
-		String mess = "Initialize Finger Table/"+Integer.toString(this.node.id);
-		out.writeUTF(mess);
+		String mess = "Initialize Finger Table/"+Integer.toString(this.node.getID());
+		toServer.writeUTF(mess);
 		String inputFromServer = fromServer.readLine();
 		String value[] = inputFromServer.split("/");
 		for(String pair : value){
 			String keyValue[] = pair.split(":");
-			dht.words.put(keyValue[0],keyValue[1]);
+			this.words.put(keyValue[0],keyValue[1]);
 		}
 		System.out.println("Key Value pairs initialized successfully");
 	}
 
-	public void run(){
-		if(dht.type){
-			BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-			while(true){
-				System.out.println("Press 1 for complete information on this node'");
-				System.out.println("Press 2 to input values.");
-				System.out.println("Press 3 to leave the network");
-				int input;
-				input = Integer.parseInt(reader.readLine());
-				switch(input){
-					case 1:
-					Set<String>keys = dht.words.keySet();
-					System.out.println("Key"+"		"+"Value");
-					for(String k : keys){
-						System.out.println(k+"		"+dht.words.get(k));
-					}
-					break;
-					case 2:
-					String word = reader.reaLine();
-					int wordID = this.getNodeId(word);
-					String mess = "Put "+word+" "+Integer.toString(wordID);
-					if(wordID > this.node.id && wordID < this.fingers[0].id || wordID == this.node.id){
-						words.put(Integer.toString(wordID),word);
-						System.out.println("Word has been put in the network");
-					}
-					else{
-						int len = this.fingers.size();
-						for(int i = 0; i < len; i++){
-							if(wordID > this.fingers[i].id && wordID < this.fingers[i+1].id || wordID == this.fingers[i].id)
-								break;
-						}
-						Socket s = new Socket(this.fingers[i].ip,this.fingers[i].port);
-						DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
-						toServer.writeUTF(mess);
-						BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
-						String inputFromServer = fromServer.readLine();
-						System.out.println("Word has been put in the network");
-						String result[] = inputFromServer.split("/");
-						for(String value : result){
-							System.out.print(value+" ");
-						}
-					}
-					break;
-					case 3:
-					this.object.leaveNetwork(this.node.id);
-					Socket s = new Socket(this.fingers[0].ip,this.fingers[0].port);
-					DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
-					String result = "";
-					Set<String>keys = words.keySet();
-					boolean first = true;
-					for(Integer key : keys){
-						if(!first)
-							result += "/";
-						first = false;
-						result = result + (Integer.toString(key)+":"+words.get(key)); 
-					}
-					String mess = "Put All/"+result;
-					toServer.writeUTF(mess);
-					toServer.close();
-					s.close();
-					connection.close();
-					break;
-					default:
-					System.out.println("The input selected is wrong.");
-					System.out.println("Please input correct option");
-				}
-			}
-		}
-		else{
-			
+	public void insertAllWords(String word) throws Exception{
+		String res[] = word.split("/");
+		for(String eachpair : res){
+			String value[] = eachpair.split("/");
+			this.words.put(value[0],value[1]);
 		}
 	}
 
-	public static void main(String args[]){
+	public void run(){
+		if(this.type){
+			try{
+				BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+				while(true){
+					System.out.println("Press 1 for complete information on this node'");
+					System.out.println("Press 2 to input values.");
+					System.out.println("Press 3 to leave the network");
+					int input;
+					input = Integer.parseInt(reader.readLine());
+					switch(input){
+						case 1:
+						Set<String>keys = this.words.keySet();
+						System.out.println("Key"+"		"+"Value");
+						for(String k : keys){
+							System.out.println(k+"		"+this.words.get(k));
+						}
+						break;
+						case 2:
+						String word = reader.readLine();
+						int wordID = this.getNodeId(word);
+						String mess = "Put "+word+" "+Integer.toString(wordID);
+						if(wordID > this.node.getID() && wordID < this.fingers.get(0).getID() || wordID == this.node.getID()){
+							words.put(Integer.toString(wordID),word);
+							System.out.println("Word has been put in the network");
+							System.out.println("The word has been put in the node with node id "+this.node.getID());
+						}
+						else{
+							int len = this.fingers.size();
+							int i;
+							for(i = 0; i < len; i++){
+								if(wordID > this.fingers.get(i).getID() && wordID < this.fingers.get(i+1).getID() || wordID == this.fingers.get(i).getID())
+									break;
+							}
+							Socket s = new Socket(this.fingers.get(i).getIP(),this.fingers.get(i).getPort());
+							DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+							toServer.writeUTF(mess);
+							BufferedReader fromServer = new BufferedReader(new InputStreamReader(s.getInputStream()));
+							String inputFromServer = fromServer.readLine();
+							System.out.println("Word has been put in the network");
+							System.out.println("The word has been put in the node with node id "+inputFromServer);
+						}
+						break;
+						case 3:
+						try{
+							Socket s = new Socket(this.predecessor.getIP(),this.predecessor.getPort());
+							DataOutputStream toServer = new DataOutputStream(s.getOutputStream());
+							String result = "";
+							Set<String>keys1 = words.keySet();
+							boolean first = true;
+							for(String key : keys1){
+								if(!first)
+									result += "/";
+								first = false;
+								result = result + (key+":"+words.get(key)); 
+							}
+							String mess1 = "Put All/"+result;
+							this.object.leaveNetwork(this.node.getID());
+							toServer.writeUTF(mess1);
+							toServer.close();
+							s.close();
+							String mess2 = "Change Predecessor/"+this.fingers.get(0).getIP()+"/"+Integer.toString(this.fingers.get(0).getPort())+"/"+Integer.toString(this.fingers.get(0).getID());
+							Socket sec = new Socket(this.fingers.get(0).getIP(),this.fingers.get(0).getPort());
+							DataOutputStream toServersec = new DataOutputStream(sec.getOutputStream());
+							toServersec.writeUTF(mess2);
+							toServersec.close();
+							sec.close();
+							connection.close();
+						}catch(IOException e){}
+						break;
+						default:
+						System.out.println("The input selected is wrong.");
+						System.out.println("Please input correct option");
+					}
+				}
+			}catch(Exception e){
+				System.out.println("Some Exception."+"\n"+"System exiting.........");
+				System.exit(0);
+			}
+		}
+		else{
+			try{
+				String result[] = message.split("/");
+				if(result[0].equals("Put")){
+					String result1 = insertWordInNetwork(message);
+				}
+				else if(result[0].equals("Put All")) {
+					insertAllWords(message);
+				}
+				else if(result[0].equals("Change Predecessor")){
+					Node temp = new Node(result[1],Integer.parseInt(result[2]),Integer.parseInt(result[3]));
+					this.predecessor = temp;
+				}
+			}catch(Exception e){}
+		}
+	}
+
+	public static void main(String args[]) throws Exception{
 		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 		System.out.println("Enter port number for this node between 1024 and 65536.");
 		// Entering port number the node will use to listen for connections from other nodes
@@ -149,7 +199,7 @@ class NodeDHT implements Runnable{
 		// Getting the IP of the machine
 		InetAddress myIP = InetAddress.getLocalHost();
 		// Obtaining reference for the Central Node from the registry
-		CentralNode object = (CentralNode)Naming.lookup("CentralNode");
+		CentralNode object = (CentralNode)Naming.lookup("CentralNodeDef");
 		// Joining the network
 		String value = object.joinNetwork(myIP.getHostAddress(),portNum);
 		if(value.equals("BUSY")){
@@ -164,16 +214,16 @@ class NodeDHT implements Runnable{
 		}
 		String arrValue[] = value.split("/");
 		// Creating the node from the information obtained
-		NodeDHT dht = new NodeDHT(arrvalue,object);
+		NodeDHT dht = new NodeDHT(arrValue,object);
 		dht.initializeWords();
 		dht.initializeFingers(object);
 		dht.type = true;
 		Thread t1 = new Thread(dht);
 		t1.start();
-		sleep(1000);
+		Thread.sleep(1000);
 		dht.type = false;
 		// Waiting for connections from other nodes
-		System.out.println("System has completed initializing. Listening for other nodes at port "+dht.node.port+".");
+		System.out.println("System has completed initializing. Listening for other nodes at port "+dht.node.getPort()+".");
 		while(true){
 			dht.connection = server.accept();
 			BufferedReader input = new BufferedReader(new InputStreamReader(dht.connection.getInputStream()));
